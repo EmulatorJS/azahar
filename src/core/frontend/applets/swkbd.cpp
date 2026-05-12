@@ -4,6 +4,10 @@
 
 #include <algorithm>
 #include <cctype>
+#ifdef __EMSCRIPTEN__
+#include <cstdlib>
+extern "C" char* EmulatorJSShowKeyboard(const char* hint, int max_length, int password_mode);
+#endif
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"
@@ -149,6 +153,37 @@ DefaultKeyboard::DefaultKeyboard(Core::System& system_) : system(system_) {}
 void DefaultKeyboard::Execute(const Frontend::KeyboardConfig& config_) {
     SoftwareKeyboard::Execute(config_);
 
+#ifdef __EMSCRIPTEN__
+    const char* hint = this->config.hint_text.empty()
+                           ? "Enter text:"
+                           : this->config.hint_text.c_str();
+    const int max_length = static_cast<int>(this->config.max_text_length);
+    char* js_result = EmulatorJSShowKeyboard(hint, max_length, 0);
+
+    const bool cancelled = js_result == nullptr;
+    std::string text = cancelled ? std::string{} : std::string{js_result};
+    if (js_result) {
+        std::free(js_result);
+    }
+
+    u8 ok_button;
+    u8 cancel_button = 0;
+    switch (this->config.button_config) {
+    case ButtonConfig::None:
+    case ButtonConfig::Single:
+        ok_button = 0;
+        break;
+    case ButtonConfig::Dual:
+        ok_button = 1;
+        break;
+    case ButtonConfig::Triple:
+        ok_button = 2;
+        break;
+    default:
+        UNREACHABLE();
+    }
+    Finalize(text, cancelled ? cancel_button : ok_button);
+#else
     auto cfg = Service::CFG::GetModule(system);
     std::string username = Common::UTF16ToUTF8(cfg->GetUsername());
     switch (this->config.button_config) {
@@ -165,6 +200,7 @@ void DefaultKeyboard::Execute(const Frontend::KeyboardConfig& config_) {
     default:
         UNREACHABLE();
     }
+#endif
 }
 
 void DefaultKeyboard::ShowError(const std::string& error) {

@@ -13,10 +13,25 @@ MICROPROFILE_DEFINE(OpenGL_StreamBuffer, "OpenGL", "Stream Buffer Orphaning",
 
 namespace OpenGL {
 
+#if defined(__EMSCRIPTEN__)
+static GLenum FixupTarget(GLenum target) {
+    return target == GL_TEXTURE_BUFFER ? GL_ARRAY_BUFFER : target;
+}
+#endif
+
 OGLStreamBuffer::OGLStreamBuffer(Driver& driver, GLenum target, GLsizeiptr size,
                                  bool prefer_coherent)
     : gl_target(target), buffer_size(size) {
     gl_buffer.Create();
+#if defined(__EMSCRIPTEN__)
+    gl_target = FixupTarget(target);
+    glBindBuffer(gl_target, gl_buffer.handle);
+    glBufferData(gl_target, size, nullptr, GL_STREAM_DRAW);
+    shadow.assign(static_cast<std::size_t>(size), 0);
+    mapped_ptr = shadow.data();
+    (void)driver;
+    (void)prefer_coherent;
+#else
     glBindBuffer(gl_target, gl_buffer.handle);
 
     GLsizeiptr allocate_size = size;
@@ -35,6 +50,7 @@ OGLStreamBuffer::OGLStreamBuffer(Driver& driver, GLenum target, GLsizeiptr size,
     } else {
         glBufferData(gl_target, allocate_size, nullptr, GL_STREAM_DRAW);
     }
+#endif
 }
 
 OGLStreamBuffer::~OGLStreamBuffer() {
@@ -54,6 +70,29 @@ GLsizeiptr OGLStreamBuffer::GetSize() const {
 }
 
 std::tuple<u8*, GLintptr, bool> OGLStreamBuffer::Map(GLsizeiptr size, GLintptr alignment) {
+#if defined(__EMSCRIPTEN__)
+    if (size > buffer_size) {
+        glBindBuffer(gl_target, gl_buffer.handle);
+        glBufferData(gl_target, size, nullptr, GL_STREAM_DRAW);
+        buffer_size = size;
+        shadow.assign(static_cast<std::size_t>(size), 0);
+        mapped_ptr = shadow.data();
+        buffer_pos = 0;
+    }
+    mapped_size = size;
+
+    if (alignment > 0) {
+        buffer_pos = Common::AlignUp<std::size_t>(buffer_pos, alignment);
+    }
+
+    bool invalidate = false;
+    if (buffer_pos + size > buffer_size) {
+        buffer_pos = 0;
+        invalidate = true;
+    }
+    mapped_offset = buffer_pos;
+    return std::make_tuple(shadow.data() + buffer_pos, buffer_pos, invalidate);
+#else
     ASSERT_MSG(size <= buffer_size, "Requested size {} exceeds buffer size {}", size, buffer_size);
     ASSERT(alignment <= buffer_size);
     mapped_size = size;
@@ -83,11 +122,18 @@ std::tuple<u8*, GLintptr, bool> OGLStreamBuffer::Map(GLsizeiptr size, GLintptr a
     }
 
     return std::make_tuple(mapped_ptr + buffer_pos - mapped_offset, buffer_pos, invalidate);
+#endif
 }
 
 void OGLStreamBuffer::Unmap(GLsizeiptr size) {
     ASSERT(size <= mapped_size);
-
+#if defined(__EMSCRIPTEN__)
+    if (size > 0) {
+        glBindBuffer(gl_target, gl_buffer.handle);
+        glBufferSubData(gl_target, buffer_pos, size, shadow.data() + buffer_pos);
+    }
+    buffer_pos += size;
+#else
     if (!coherent && size > 0) {
         glFlushMappedBufferRange(gl_target, buffer_pos - mapped_offset, size);
     }
@@ -97,6 +143,7 @@ void OGLStreamBuffer::Unmap(GLsizeiptr size) {
     }
 
     buffer_pos += size;
+#endif
 }
 
 } // namespace OpenGL

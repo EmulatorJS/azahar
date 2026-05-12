@@ -43,7 +43,7 @@ public:
         if (offset > size) {
             return ResultWriteBeyondEnd;
         } else if (offset == size) {
-            return 0ULL;
+            return std::size_t{0};
         }
 
         if (offset + length > size) {

@@ -5,6 +5,19 @@
 #pragma once
 
 // High precision may or may not be supported in GLES3. If it isn't, use medium precision instead.
+#if defined(__EMSCRIPTEN__)
+static constexpr char fragment_shader_precision_OES[] = R"(
+#if GL_ES
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp int;
+precision highp float;
+#else
+precision mediump int;
+precision mediump float;
+#endif // GL_FRAGMENT_PRECISION_HIGH
+#endif
+)";
+#else
 static constexpr char fragment_shader_precision_OES[] = R"(
 #if GL_ES
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -20,6 +33,7 @@ precision mediump uimage2D;
 #endif // GL_FRAGMENT_PRECISION_HIGH
 #endif
 )";
+#endif
 
 namespace Pica {
 struct ShaderSetup;

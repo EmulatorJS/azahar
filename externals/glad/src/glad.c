@@ -1616,7 +1616,7 @@ int gladLoadGLLoader(GLADloadproc load) {
 }
 
 static void load_GL_ES_VERSION_2_0(GLADloadproc load) {
-	if(!GLAD_GL_ES_VERSION_2_0) return;
+	/* emscripten: forced */
 	glad_glActiveTexture = (PFNGLACTIVETEXTUREPROC)load("glActiveTexture");
 	glad_glAttachShader = (PFNGLATTACHSHADERPROC)load("glAttachShader");
 	glad_glBindAttribLocation = (PFNGLBINDATTRIBLOCATIONPROC)load("glBindAttribLocation");
@@ -1761,7 +1761,7 @@ static void load_GL_ES_VERSION_2_0(GLADloadproc load) {
 	glad_glViewport = (PFNGLVIEWPORTPROC)load("glViewport");
 }
 static void load_GL_ES_VERSION_3_0(GLADloadproc load) {
-	if(!GLAD_GL_ES_VERSION_3_0) return;
+	/* emscripten: forced */
 	glad_glReadBuffer = (PFNGLREADBUFFERPROC)load("glReadBuffer");
 	glad_glDrawRangeElements = (PFNGLDRAWRANGEELEMENTSPROC)load("glDrawRangeElements");
 	glad_glTexImage3D = (PFNGLTEXIMAGE3DPROC)load("glTexImage3D");
@@ -1868,7 +1868,7 @@ static void load_GL_ES_VERSION_3_0(GLADloadproc load) {
 	glad_glGetInternalformativ = (PFNGLGETINTERNALFORMATIVPROC)load("glGetInternalformativ");
 }
 static void load_GL_ES_VERSION_3_1(GLADloadproc load) {
-	if(!GLAD_GL_ES_VERSION_3_1) return;
+	/* emscripten: only run for 3.1+, but LTO breaks the flag, so try anyway */
 	glad_glDispatchCompute = (PFNGLDISPATCHCOMPUTEPROC)load("glDispatchCompute");
 	glad_glDispatchComputeIndirect = (PFNGLDISPATCHCOMPUTEINDIRECTPROC)load("glDispatchComputeIndirect");
 	glad_glDrawArraysIndirect = (PFNGLDRAWARRAYSINDIRECTPROC)load("glDrawArraysIndirect");
@@ -1939,7 +1939,7 @@ static void load_GL_ES_VERSION_3_1(GLADloadproc load) {
 	glad_glVertexBindingDivisor = (PFNGLVERTEXBINDINGDIVISORPROC)load("glVertexBindingDivisor");
 }
 static void load_GL_ES_VERSION_3_2(GLADloadproc load) {
-	if(!GLAD_GL_ES_VERSION_3_2) return;
+	/* emscripten: only run for 3.2+, but LTO breaks the flag, so try anyway */
 	glad_glBlendBarrier = (PFNGLBLENDBARRIERPROC)load("glBlendBarrier");
 	glad_glCopyImageSubData = (PFNGLCOPYIMAGESUBDATAPROC)load("glCopyImageSubData");
 	glad_glDebugMessageControl = (PFNGLDEBUGMESSAGECONTROLPROC)load("glDebugMessageControl");
@@ -2033,7 +2033,14 @@ static void find_coreGLES2(void) {
 #ifdef _MSC_VER
     sscanf_s(version, "%d.%d", &major, &minor);
 #else
+    major = 0; minor = 0;
     sscanf(version, "%d.%d", &major, &minor);
+#endif
+
+#if defined(__EMSCRIPTEN__)
+    // Just force this it works
+    major = 3;
+    minor = 0;
 #endif
 
     GLVersion.major = major; GLVersion.minor = minor;
@@ -2042,6 +2049,10 @@ static void find_coreGLES2(void) {
 	GLAD_GL_ES_VERSION_3_0 = (major == 3 && minor >= 0) || major > 3;
 	GLAD_GL_ES_VERSION_3_1 = (major == 3 && minor >= 1) || major > 3;
 	GLAD_GL_ES_VERSION_3_2 = (major == 3 && minor >= 2) || major > 3;
+#if defined(__EMSCRIPTEN__)
+    GLAD_GL_ES_VERSION_2_0 = 1;
+    GLAD_GL_ES_VERSION_3_0 = 1;
+#endif
 	if (GLVersion.major > 3 || (GLVersion.major >= 3 && GLVersion.minor >= 2)) {
 		max_loaded_major = 3;
 		max_loaded_minor = 2;

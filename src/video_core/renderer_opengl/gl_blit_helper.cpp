@@ -44,12 +44,18 @@ OGLSampler CreateSampler(GLenum filter) {
 }
 
 OGLProgram CreateProgram(std::string_view frag, std::string_view debug_name) {
+#if defined(__EMSCRIPTEN__)
+    (void)frag;
+    (void)debug_name;
+    return OGLProgram{};
+#else
     OGLProgram program;
     program.SetDebugName(debug_name);
     program.Create(HostShaders::FULL_SCREEN_TRIANGLE_VERT, frag);
     glProgramUniform2f(program.handle, 0, 1.f, 1.f);
     glProgramUniform2f(program.handle, 1, 0.f, 0.f);
     return program;
+#endif
 }
 
 } // Anonymous namespace

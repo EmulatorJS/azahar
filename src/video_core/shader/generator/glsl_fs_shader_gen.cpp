@@ -37,6 +37,19 @@ static bool IsPassThroughTevStage(const Pica::TexturingRegs::TevStageConfig& sta
 }
 
 // High precision may or may not be supported in GLES3. If it isn't, use medium precision instead.
+#if defined(__EMSCRIPTEN__)
+static constexpr char fragment_shader_precision_OES[] = R"(
+#if GL_ES
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp int;
+precision highp float;
+#else
+precision mediump int;
+precision mediump float;
+#endif // GL_FRAGMENT_PRECISION_HIGH
+#endif
+)";
+#else
 static constexpr char fragment_shader_precision_OES[] = R"(
 #if GL_ES
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -52,6 +65,7 @@ precision mediump uimage2D;
 #endif // GL_FRAGMENT_PRECISION_HIGH
 #endif
 )";
+#endif
 
 constexpr static std::string_view FSUniformBlockDef = R"(
 #define NUM_TEV_STAGES 6
@@ -67,7 +81,11 @@ struct LightSrc {
     float dist_atten_bias;
     float dist_atten_scale;
 };
+#if defined(GL_ES) && __VERSION__ < 310
+layout (std140) uniform fs_data {
+#else
 layout (binding = 2, std140) uniform fs_data {
+#endif
     int framebuffer_scale;
     int alphatest_ref;
     float depth_scale;
@@ -823,7 +841,7 @@ void FragmentModule::WriteFog() {
     // Generate clamped fog factor from LUT for given fog index
     out += "float fog_i = clamp(floor(fog_index), 0.0, 127.0);\n"
            "float fog_f = fog_index - fog_i;\n"
-           "vec2 fog_lut_entry = texelFetch(texture_buffer_lut_lf, int(fog_i) + "
+           "vec2 fog_lut_entry = texelFetchBuf(texture_buffer_lut_lf, int(fog_i) + "
            "fog_lut_offset).rg;\n"
            "float fog_factor = fog_lut_entry.r + fog_lut_entry.g * fog_f;\n"
            "fog_factor = clamp(fog_factor, 0.0, 1.0);\n";
@@ -1047,7 +1065,7 @@ float ProcTexLookupLUT(int offset, float coord) {
     float index_i = clamp(floor(coord), 0.0, 127.0);
     float index_f = coord - index_i; // fract() cannot be used here because 128.0 needs to be
                                      // extracted as index_i = 127.0 and index_f = 1.0
-    vec2 entry = texelFetch(texture_buffer_lut_rg, int(index_i) + offset).rg;
+    vec2 entry = texelFetchBuf(texture_buffer_lut_rg, int(index_i) + offset).rg;
     return clamp(entry.r + entry.g * index_f, 0.0, 1.0);
 }
     )";
@@ -1108,16 +1126,16 @@ float ProcTexNoiseCoef(vec2 x) {
     case ProcTexFilter::LinearMipmapNearest:
         out += "int lut_index_i = int(lut_coord) + lut_offset;\n";
         out += "float lut_index_f = fract(lut_coord);\n";
-        out += "return texelFetch(texture_buffer_lut_rgba, lut_index_i + "
+        out += "return texelFetchBuf(texture_buffer_lut_rgba, lut_index_i + "
                "proctex_lut_offset) + "
                "lut_index_f * "
-               "texelFetch(texture_buffer_lut_rgba, lut_index_i + proctex_diff_lut_offset);\n";
+               "texelFetchBuf(texture_buffer_lut_rgba, lut_index_i + proctex_diff_lut_offset);\n";
         break;
     case ProcTexFilter::Nearest:
     case ProcTexFilter::NearestMipmapLinear:
     case ProcTexFilter::NearestMipmapNearest:
         out += "lut_coord += float(lut_offset);\n";
-        out += "return texelFetch(texture_buffer_lut_rgba, int(round(lut_coord)) + "
+        out += "return texelFetchBuf(texture_buffer_lut_rgba, int(round(lut_coord)) + "
                "proctex_lut_offset);\n";
         break;
     }
@@ -1321,9 +1339,34 @@ void FragmentModule::DefineBindingsVK() {
 void FragmentModule::DefineBindingsGL() {
     // Uniform and texture buffers
     out += FSUniformBlockDef;
+#if defined(__EMSCRIPTEN__)
+    out += "uniform sampler2D texture_buffer_lut_lf;\n";
+    out += "uniform sampler2D texture_buffer_lut_rg;\n";
+    out += "uniform sampler2D texture_buffer_lut_rgba;\n";
+    out += "#define texelFetchBuf(s, i) texelFetch((s), ivec2((i), 0), 0)\n";
+    out += "float fma(float a, float b, float c) { return a * b + c; }\n";
+    out += "vec2 fma(vec2 a, vec2 b, vec2 c) { return a * b + c; }\n";
+    out += "vec3 fma(vec3 a, vec3 b, vec3 c) { return a * b + c; }\n";
+    out += "vec4 fma(vec4 a, vec4 b, vec4 c) { return a * b + c; }\n\n";
+
+    const auto texture_type = config.texture.texture0_type.Value();
+    for (u32 i = 0; i < 3; i++) {
+        const auto sampler =
+            i == 0 && texture_type == TextureType::TextureCube ? "samplerCube" : "sampler2D";
+        out += fmt::format("uniform {} tex{};\n", sampler, i);
+    }
+
+    if (user.use_custom_normal) {
+        out += "uniform sampler2D tex_normal;\n";
+    }
+    if (use_blend_fallback) {
+        out += "uniform sampler2D tex_color;\n";
+    }
+#else
     out += "layout(binding = 3) uniform samplerBuffer texture_buffer_lut_lf;\n";
     out += "layout(binding = 4) uniform samplerBuffer texture_buffer_lut_rg;\n";
-    out += "layout(binding = 5) uniform samplerBuffer texture_buffer_lut_rgba;\n\n";
+    out += "layout(binding = 5) uniform samplerBuffer texture_buffer_lut_rgba;\n";
+    out += "#define texelFetchBuf(s, i) texelFetch((s), (i))\n\n";
 
     // Texture samplers
     const auto texture_type = config.texture.texture0_type.Value();
@@ -1353,6 +1396,7 @@ void FragmentModule::DefineBindingsGL() {
     if (config.framebuffer.shadow_rendering) {
         out += "layout(binding = 6, r32ui) uniform uimage2D shadow_buffer;\n\n";
     }
+#endif
 }
 
 void FragmentModule::DefineHelpers() {
@@ -1395,7 +1439,7 @@ void FragmentModule::DefineLightingHelpers() {
 
     out += R"(
 float LookupLightingLUT(int lut_index, int index, float delta) {
-    vec2 entry = texelFetch(texture_buffer_lut_lf, lighting_lut_offset[lut_index >> 2][lut_index & 3] + index).rg;
+    vec2 entry = texelFetchBuf(texture_buffer_lut_lf, lighting_lut_offset[lut_index >> 2][lut_index & 3] + index).rg;
     return entry.r + entry.g * delta;
 }
 

@@ -65,9 +65,12 @@ GLenum MakeAttributeType(Pica::PipelineRegs::VertexAttributeFormat format) {
 }
 
 [[nodiscard]] GLsizeiptr TextureBufferSize(const Driver& driver, bool is_lf) {
+#if defined(__EMSCRIPTEN__)
+    return TEXTURE_BUFFER_SIZE;
+#else
     // Use the smallest texel size from the texel views
     // which corresponds to GL_RG32F
-    GLint max_texel_buffer_size;
+    GLint max_texel_buffer_size = 0;
     glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &max_texel_buffer_size);
     GLsizeiptr candidate = std::min<GLsizeiptr>(max_texel_buffer_size * 8ULL, TEXTURE_BUFFER_SIZE);
 
@@ -77,6 +80,7 @@ GLenum MakeAttributeType(Pica::PipelineRegs::VertexAttributeFormat format) {
     }
 
     return candidate;
+#endif
 }
 
 } // Anonymous namespace
@@ -151,12 +155,14 @@ RasterizerOpenGL::RasterizerOpenGL(Memory::MemorySystem& memory, Pica::PicaCore&
     state.texture_buffer_lut_rg.texture_buffer = texture_buffer_lut_rg.handle;
     state.texture_buffer_lut_rgba.texture_buffer = texture_buffer_lut_rgba.handle;
     state.Apply();
+#if !defined(__EMSCRIPTEN__)
     glActiveTexture(TextureUnits::TextureBufferLUT_LF.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, texture_lf_buffer.GetHandle());
     glActiveTexture(TextureUnits::TextureBufferLUT_RG.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, texture_buffer.GetHandle());
     glActiveTexture(TextureUnits::TextureBufferLUT_RGBA.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, texture_buffer.GetHandle());
+#endif
 
     // Bind index buffer for hardware shader path
     state.draw.vertex_array = hw_vao.handle;
@@ -466,6 +472,10 @@ bool RasterizerOpenGL::SetupGeometryShader() {
 }
 
 bool RasterizerOpenGL::AccelerateDrawBatch(bool is_indexed) {
+#if defined(__EMSCRIPTEN__)
+    (void)is_indexed;
+    return false;
+#else
     if (regs.pipeline.use_gs != Pica::PipelineRegs::UseGS::No) {
         if (regs.pipeline.gs_config.mode != Pica::PipelineRegs::GSMode::Point) {
             return false;
@@ -484,6 +494,7 @@ bool RasterizerOpenGL::AccelerateDrawBatch(bool is_indexed) {
     }
 
     return Draw(true, is_indexed);
+#endif
 }
 
 bool RasterizerOpenGL::AccelerateDrawBatchInternal(bool is_indexed) {

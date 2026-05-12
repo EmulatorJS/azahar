@@ -246,6 +246,7 @@ void OpenGLState::Apply() const {
     }
 
     // Shadow Images
+#if !defined(__EMSCRIPTEN__)
     if (image_shadow_buffer != cur_state.image_shadow_buffer) {
         glBindImageTexture(ImageUnits::ShadowBuffer, image_shadow_buffer, 0, GL_FALSE, 0,
                            GL_READ_WRITE, GL_R32UI);
@@ -280,6 +281,7 @@ void OpenGLState::Apply() const {
         glBindImageTexture(ImageUnits::ShadowTextureNZ, image_shadow_texture_nz, 0, GL_FALSE, 0,
                            GL_READ_ONLY, GL_R32UI);
     }
+#endif
 
     // Framebuffer
     if (draw.read_framebuffer != cur_state.draw.read_framebuffer) {
@@ -310,9 +312,11 @@ void OpenGLState::Apply() const {
     }
 
     // Program pipeline
+#if !defined(__EMSCRIPTEN__)
     if (draw.program_pipeline != cur_state.draw.program_pipeline) {
         glBindProgramPipeline(draw.program_pipeline);
     }
+#endif
 
     // Scissor test
     if (scissor.enabled != cur_state.scissor.enabled) {

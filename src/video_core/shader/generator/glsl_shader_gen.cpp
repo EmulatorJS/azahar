@@ -17,6 +17,8 @@ namespace Pica::Shader::Generator::GLSL {
 constexpr std::string_view VSPicaUniformBlockDef = R"(
 #ifdef VULKAN
 layout (set = 0, binding = 0, std140) uniform vs_pica_data {
+#elif defined(GL_ES) && __VERSION__ < 310
+layout (std140) uniform vs_pica_data {
 #else
 layout (binding = 0, std140) uniform vs_pica_data {
 #endif
@@ -29,6 +31,8 @@ layout (binding = 0, std140) uniform vs_pica_data {
 constexpr std::string_view VSUniformBlockDef = R"(
 #ifdef VULKAN
 layout (set = 0, binding = 1, std140) uniform vs_data {
+#elif defined(GL_ES) && __VERSION__ < 310
+layout (std140) uniform vs_data {
 #else
 layout (binding = 1, std140) uniform vs_data {
 #endif

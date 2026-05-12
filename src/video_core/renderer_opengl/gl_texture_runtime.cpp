@@ -104,9 +104,13 @@ static constexpr std::array<FormatTuple, 8> CUSTOM_TUPLES = {{
     glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+#if !defined(__EMSCRIPTEN__)
     if (!debug_name.empty()) {
         glObjectLabel(GL_TEXTURE, texture.handle, -1, debug_name.data());
     }
+#else
+    (void)debug_name;
+#endif
 
     return texture;
 }
@@ -261,6 +265,27 @@ void TextureRuntime::ClearTexture(Surface& surface, const VideoCore::TextureClea
 
 bool TextureRuntime::CopyTextures(Surface& source, Surface& dest,
                                   std::span<const VideoCore::TextureCopy> copies) {
+#if defined(__EMSCRIPTEN__)
+    for (const auto& copy : copies) {
+        VideoCore::TextureBlit blit{};
+        blit.src_level = copy.src_level;
+        blit.dst_level = copy.dst_level;
+        blit.src_layer = copy.src_layer;
+        blit.dst_layer = copy.dst_layer;
+        blit.src_rect.left = copy.src_offset.x;
+        blit.src_rect.bottom = copy.src_offset.y;
+        blit.src_rect.right = copy.src_offset.x + copy.extent.width;
+        blit.src_rect.top = copy.src_offset.y + copy.extent.height;
+        blit.dst_rect.left = copy.dst_offset.x;
+        blit.dst_rect.bottom = copy.dst_offset.y;
+        blit.dst_rect.right = copy.dst_offset.x + copy.extent.width;
+        blit.dst_rect.top = copy.dst_offset.y + copy.extent.height;
+        if (!BlitTextures(source, dest, blit)) {
+            return false;
+        }
+    }
+    return true;
+#else
     const GLenum src_textarget = source.texture_type == VideoCore::TextureType::CubeMap
                                      ? GL_TEXTURE_CUBE_MAP
                                      : GL_TEXTURE_2D;
@@ -274,6 +299,7 @@ bool TextureRuntime::CopyTextures(Surface& source, Surface& dest,
                            copy.extent.width, copy.extent.height, 1);
     }
     return true;
+#endif
 }
 
 bool TextureRuntime::BlitTextures(Surface& source, Surface& dest,
@@ -378,8 +404,23 @@ GLuint Surface::CopyHandle() noexcept {
     for (u32 level = 0; level < levels; level++) {
         const u32 width = GetScaledWidth() >> level;
         const u32 height = GetScaledHeight() >> level;
+#if defined(__EMSCRIPTEN__)
+        OGLFramebuffer read_fb;
+        OGLFramebuffer draw_fb;
+        read_fb.Create();
+        draw_fb.Create();
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb.handle);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                               Handle(1), level);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fb.handle);
+        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                               copy_texture.handle, level);
+        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT,
+                          GL_NEAREST);
+#else
         glCopyImageSubData(Handle(1), GL_TEXTURE_2D, level, 0, 0, 0, copy_texture.handle,
                            GL_TEXTURE_2D, level, 0, 0, 0, width, height, 1);
+#endif
     }
 
     return copy_texture.handle;

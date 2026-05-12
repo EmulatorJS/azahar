@@ -393,6 +393,12 @@ void Context::MakeRequestNonSSL(httplib::Request& request, const URLInfo& url_in
 
 void Context::MakeRequestSSL(httplib::Request& request, const URLInfo& url_info,
                              std::vector<Context::RequestHeader>& pending_headers) {
+#ifdef __EMSCRIPTEN__
+    // No SSL on emscripten — return a failure state so callers can move on.
+    LOG_ERROR(Service_HTTP, "SSL HTTP requests are unavailable on emscripten builds");
+    state = RequestState::Completed;
+    return;
+#else
     httplib::Error error{-1};
     X509* cert = nullptr;
     EVP_PKEY* key = nullptr;
@@ -447,6 +453,7 @@ void Context::MakeRequestSSL(httplib::Request& request, const URLInfo& url_info,
         LOG_DEBUG(Service_HTTP, "Request successful");
         state = RequestState::ReceivingBody;
     }
+#endif // __EMSCRIPTEN__
 }
 
 bool Context::ContentProvider(size_t offset, size_t length, httplib::DataSink& sink) {

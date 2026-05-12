@@ -2,7 +2,17 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#ifdef __EMSCRIPTEN__
+// No OpenSSL on wasm; std::random_device on emscripten maps to crypto.getRandomValues.
+#include <random>
+static int RAND_bytes(unsigned char *buf, int num) {
+    static thread_local std::random_device rd;
+    for (int i = 0; i < num; ++i) buf[i] = static_cast<unsigned char>(rd());
+    return 1;
+}
+#else
 #include <openssl/rand.h>
+#endif
 #include "common/archives.h"
 #include "common/common_types.h"
 #include "core/core.h"

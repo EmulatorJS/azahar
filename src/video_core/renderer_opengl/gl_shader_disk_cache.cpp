@@ -397,6 +397,10 @@ void ShaderDiskCache::SaveDecompiled(u64 unique_identifier, const std::string& c
 void ShaderDiskCache::SaveDump(u64 unique_identifier, GLuint program) {
     if (!IsUsable())
         return;
+#if defined(__EMSCRIPTEN__)
+    (void)unique_identifier; (void)program;
+    return;
+#endif
 
     GLint binary_length{};
     glGetProgramiv(program, GL_PROGRAM_BINARY_LENGTH, &binary_length);
@@ -420,6 +424,10 @@ void ShaderDiskCache::SaveDump(u64 unique_identifier, GLuint program) {
 void ShaderDiskCache::SaveDumpToFile(u64 unique_identifier, GLuint program, bool sanitize_mul) {
     if (!IsUsable())
         return;
+#if defined(__EMSCRIPTEN__)
+    (void)unique_identifier; (void)program; (void)sanitize_mul;
+    return;
+#endif
 
     GLint binary_length{};
     glGetProgramiv(program, GL_PROGRAM_BINARY_LENGTH, &binary_length);

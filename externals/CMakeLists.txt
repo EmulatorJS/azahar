@@ -323,7 +323,7 @@ if (USE_SYSTEM_OPENSSL)
     endif()
 endif()
 
-if (NOT OPENSSL_FOUND)
+if (NOT OPENSSL_FOUND AND NOT EMSCRIPTEN)
     # LibreSSL
     set(LIBRESSL_SKIP_INSTALL ON CACHE BOOL "")
     set(OPENSSLDIR "/etc/ssl/")
@@ -334,6 +334,13 @@ if (NOT OPENSSL_FOUND)
     get_directory_property(OPENSSL_LIBRARIES
         DIRECTORY libressl
         DEFINITION OPENSSL_LIBS)
+endif()
+
+if (EMSCRIPTEN AND NOT OPENSSL_FOUND)
+    # No SSL on wasm — web_service / httplib SSL paths are disabled by other flags.
+    # Provide an empty interface so anything that links OPENSSL_LIBRARIES is harmless.
+    add_library(ssl INTERFACE)
+    set(OPENSSL_LIBRARIES "")
 endif()
 
 # httplib
@@ -361,8 +368,10 @@ else()
     target_include_directories(httplib INTERFACE ./httplib)
     target_disable_warnings(httplib)
 endif()
-target_compile_options(httplib INTERFACE -DCPPHTTPLIB_OPENSSL_SUPPORT)
-target_link_libraries(httplib INTERFACE ${OPENSSL_LIBRARIES})
+if (NOT EMSCRIPTEN)
+    target_compile_options(httplib INTERFACE -DCPPHTTPLIB_OPENSSL_SUPPORT)
+    target_link_libraries(httplib INTERFACE ${OPENSSL_LIBRARIES})
+endif()
 
 if (UNIX AND NOT APPLE)
     add_subdirectory(gamemode)

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <tuple>
+#include <vector>
 #include "video_core/renderer_opengl/gl_resource_manager.h"
 
 namespace OpenGL {
@@ -44,6 +45,11 @@ private:
     GLintptr mapped_offset = 0;
     GLsizeiptr mapped_size = 0;
     u8* mapped_ptr = nullptr;
+#if defined(__EMSCRIPTEN__)
+    // CPU shadow used in place of glMapBufferRange (WebGL2 lacks the
+    // unsynchronized/persistent map subset we depend on).
+    std::vector<u8> shadow;
+#endif
 };
 
 } // namespace OpenGL

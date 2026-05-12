@@ -8,7 +8,16 @@
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <fmt/format.h>
+#ifdef __EMSCRIPTEN__
+#include <random>
+static int RAND_bytes(unsigned char *buf, int num) {
+    static thread_local std::random_device rd;
+    for (int i = 0; i < num; ++i) buf[i] = static_cast<unsigned char>(rd());
+    return 1;
+}
+#else
 #include <openssl/rand.h>
+#endif
 #include "common/alignment.h"
 #include "common/archives.h"
 #include "common/common_paths.h"

@@ -11,6 +11,7 @@
 #include "citra_libretro/citra_libretro.h"
 #include "citra_libretro/environment.h"
 #include "citra_libretro/input/input_factory.h"
+#include "common/logging/log.h"
 #include "common/settings.h"
 #include "core/3ds.h"
 #ifdef ENABLE_OPENGL
@@ -22,37 +23,32 @@
 #ifdef ENABLE_OPENGL
 /// LibRetro expects a "default" GL state.
 void ResetGLState() {
-    // Reset internal state.
     OpenGL::OpenGLState state{};
     state.Apply();
 
-    // Clean up global state.
+#if !defined(__EMSCRIPTEN__)
     if (!Settings::values.use_gles) {
         glLogicOp(GL_COPY);
     }
+#endif
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glDepthMask(GL_TRUE);
-
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
     glDisable(GL_STENCIL_TEST);
     glStencilFunc(GL_ALWAYS, 0, 0xFFFFFFFF);
-
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ZERO);
     glBlendEquation(GL_FUNC_ADD);
     glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
     glBlendColor(0, 0, 0, 0);
-
+#if !defined(__EMSCRIPTEN__)
     glDisable(GL_COLOR_LOGIC_OP);
-
+#endif
     glDisable(GL_DITHER);
-
     glDisable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-
     glActiveTexture(GL_TEXTURE0);
 }
 #endif

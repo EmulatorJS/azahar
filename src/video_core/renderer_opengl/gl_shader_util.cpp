@@ -15,6 +15,9 @@ namespace OpenGL {
 
 GLuint LoadShader(std::string_view source, GLenum type, const std::string& debug_name) {
     std::string preamble;
+#if defined(__EMSCRIPTEN__)
+    preamble = "#version 300 es\nprecision highp float;\nprecision highp int;\n";
+#else
     if (GLES) {
         preamble = R"(#version 320 es
 
@@ -29,6 +32,7 @@ GLuint LoadShader(std::string_view source, GLenum type, const std::string& debug
     } else {
         preamble = "#version 430 core\n";
     }
+#endif
 
     std::string_view debug_type;
     switch (type) {
@@ -44,6 +48,12 @@ GLuint LoadShader(std::string_view source, GLenum type, const std::string& debug
     default:
         UNREACHABLE();
     }
+
+#if defined(__EMSCRIPTEN__)
+    if (type == GL_GEOMETRY_SHADER) {
+        return 0;
+    }
+#endif
 
     std::array<const GLchar*, 2> src_arr{preamble.data(), source.data()};
     std::array<GLint, 2> lengths{static_cast<GLint>(preamble.size()),
@@ -96,11 +106,14 @@ GLuint LoadProgram(bool separable_program, std::span<const GLuint> shaders,
         }
     }
 
+#if !defined(__EMSCRIPTEN__)
     if (separable_program) {
         glProgramParameteri(program_id, GL_PROGRAM_SEPARABLE, GL_TRUE);
     }
-
     glProgramParameteri(program_id, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
+#else
+    (void)separable_program;
+#endif
     glLinkProgram(program_id);
 
     // Check the program
@@ -127,6 +140,37 @@ GLuint LoadProgram(bool separable_program, std::span<const GLuint> shaders,
             glDetachShader(program_id, shader);
         }
     }
+
+#if defined(__EMSCRIPTEN__)
+    if (result == GL_TRUE) {
+        glUseProgram(program_id);
+        const auto set_sampler = [&](const char* name, GLint unit) {
+            const GLint loc = glGetUniformLocation(program_id, name);
+            if (loc >= 0) {
+                glUniform1i(loc, unit);
+            }
+        };
+        set_sampler("tex0", 0);
+        set_sampler("tex1", 1);
+        set_sampler("tex2", 2);
+        set_sampler("texture_buffer_lut_lf", 3);
+        set_sampler("texture_buffer_lut_rg", 4);
+        set_sampler("texture_buffer_lut_rgba", 5);
+        set_sampler("tex_normal", 6);
+        set_sampler("tex_color", 7);
+
+        const auto set_block = [&](const char* name, GLuint binding) {
+            const GLuint idx = glGetUniformBlockIndex(program_id, name);
+            if (idx != GL_INVALID_INDEX) {
+                glUniformBlockBinding(program_id, idx, binding);
+            }
+        };
+        set_block("vs_pica_data", 0);
+        set_block("vs_data", 1);
+        set_block("fs_data", 2);
+        glUseProgram(0);
+    }
+#endif
 
     return program_id;
 }

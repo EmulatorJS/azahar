@@ -389,6 +389,17 @@ endif()
 # Use system tsl::robin_map if available (otherwise we fallback to version bundled with dynarmic)
 find_package(tsl-robin-map QUIET)
 
+# When building for a platform that disables dynarmic (e.g. emscripten / wasm32),
+# its bundled robin-map target isn't created, but the headers are still on disk.
+# Stand up the same target names as the bundled CMakeLists would (robin_map +
+# tsl::robin_map alias) so video_core / libretro can link either spelling.
+if(NOT TARGET tsl::robin_map AND EXISTS "${CMAKE_SOURCE_DIR}/externals/dynarmic/externals/robin-map/include/tsl/robin_map.h")
+    add_library(robin_map INTERFACE)
+    target_include_directories(robin_map INTERFACE
+        "${CMAKE_SOURCE_DIR}/externals/dynarmic/externals/robin-map/include")
+    add_library(tsl::robin_map ALIAS robin_map)
+endif()
+
 # Platform-specific library requirements
 # ======================================
 

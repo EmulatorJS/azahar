@@ -501,6 +501,18 @@ void RendererOpenGL::ConfigureFramebufferTexture(TextureInfo& texture,
     glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, texture.gl_format,
                  texture.gl_type, nullptr);
 
+#if defined(__EMSCRIPTEN__)
+    if (format == Pica::PixelFormat::RGB8) {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+    } else if (format == Pica::PixelFormat::RGBA8) {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_ALPHA);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_BLUE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_GREEN);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
+    }
+#endif
+
     state.texture_units[0].texture_2d = 0;
     state.Apply();
 }

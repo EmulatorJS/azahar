@@ -92,7 +92,10 @@ void SetCurrentThreadName(const char* name) {
 // MinGW with the POSIX threading model does not support pthread_setname_np
 #if !defined(_WIN32) || defined(_MSC_VER)
 void SetCurrentThreadName(const char* name) {
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+    // Emscripten's libc does not implement pthread_setname_np; debug naming is a no-op.
+    (void)name;
+#elif defined(__APPLE__)
     pthread_setname_np(name);
 #elif defined(__Bitrig__) || defined(__DragonFly__) || defined(__FreeBSD__) || defined(__OpenBSD__)
     pthread_set_name_np(pthread_self(), name);
